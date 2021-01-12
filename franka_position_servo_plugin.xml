@@ -1,0 +1,9 @@
+<library path="lib/libfranka_position_servo">
+  <class name="franka_position_servo/PositionJointPositionController"
+         type="franka_position_servo::PositionJointPositionController"
+         base_class_type="controller_interface::ControllerBase">
+    <description>
+      Controller for commanding absolute joint positions of the Franka arm
+    </description>
+  </class>
+</library>

@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>franka_position_servo</name>
+  <version>0.7.0</version>
+  <description>franka_position_servo provides code for controlling Franka Emika robot with ros_control</description>
+  <maintainer email="support@franka.de">Franka Emika GmbH</maintainer>
+  <license>Apache 2.0</license>
+
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>message_generation</build_depend>
+  <build_depend>eigen</build_depend>
+
+  <build_export_depend>message_runtime</build_export_depend>
+
+  <depend>controller_interface</depend>
+  <depend>dynamic_reconfigure</depend>
+  <depend>eigen_conversions</depend>
+  <depend>franka_hw</depend>
+  <depend>geometry_msgs</depend>
+  <depend>control_msgs</depend>
+  <depend>actionlib_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>franka_msgs</depend>
+  <depend>franka_control</depend>
+  <depend>hardware_interface</depend>
+  <depend>tf</depend>
+  <depend>tf_conversions</depend>
+  <depend>libfranka</depend>
+  <depend>pluginlib</depend>
+  <depend>realtime_tools</depend>
+  <depend>roscpp</depend>
+
+  <!-- <exec_depend>franka_control</exec_depend> -->
+  <exec_depend>franka_description</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>panda_moveit_config</exec_depend>
+  <exec_depend>rospy</exec_depend>
+
+  <export>
+    <controller_interface plugin="${prefix}/franka_position_servo_plugin.xml"/>
+  </export>
+</package>

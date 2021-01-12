@@ -1,0 +1,20 @@
+<?xml version="1.0" ?>
+<launch>
+  <arg name="robot_ip" />
+  <arg name="load_gripper" default="true" />
+  <include file="$(find franka_control)/launch/franka_control.launch" >
+    <arg name="robot_ip" value="$(arg robot_ip)" />
+    <arg name="load_gripper" value="$(arg load_gripper)" />
+  </include>
+
+  <rosparam command="load" file="$(find franka_position_servo)/config/franka_position_servo.yaml" />
+  <rosparam command="load" file="$(find franka_position_servo)/config/robot_config.yaml" />
+  <node name="controller_spawner_1" pkg="controller_manager" type="spawner" respawn="false" output="screen"  args="joint_position_controller"/>
+  <node name="controller_spawner_2" pkg="controller_manager" type="spawner" respawn="true" output="screen"  args="--stopped position_joint_trajectory_controller"/>
+  <!-- <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_position_servo)/launch/robot.rviz"/> -->
+  <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false" />
+
+	<node pkg="tf" type="static_transform_publisher" name="hand_camera_tf" args="-0.033 -0.017 0.075 1.57 0 0 /panda_hand /panda_camera 100"/> 
+  <!--node pkg="tf" type="static_transform_publisher" name="hand_camera_tf" args="-0.033 -0.017 0.075 -3.14 -1.57 0 /panda_hand /camera_link 100"/-->
+
+</launch>
