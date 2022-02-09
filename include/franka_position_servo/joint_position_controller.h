@@ -52,11 +52,17 @@
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 
+#include <geometry_msgs/WrenchStamped.h>
+#include <geometry_msgs/PoseStamped.h>
+
+#include <Eigen/Dense>
+
 
 namespace franka_position_servo {
 
 class PositionJointPositionController : public controller_interface::MultiInterfaceController<
                                            hardware_interface::PositionJointInterface, 
+                                           franka_hw::FrankaStateInterface,
                                            franka_hw::FrankaModelInterface> {
  public:
   bool init(hardware_interface::RobotHW* robot_hardware, ros::NodeHandle& node_handle) override;
@@ -67,6 +73,7 @@ class PositionJointPositionController : public controller_interface::MultiInterf
   hardware_interface::PositionJointInterface* position_joint_interface_;
   std::vector<hardware_interface::JointHandle> position_joint_handles_;
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
+  std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
 
   std::array<double, 7> initial_pos_{};
   std::array<double, 7> prev_pos_{};
@@ -82,15 +89,22 @@ class PositionJointPositionController : public controller_interface::MultiInterf
 
   double param_change_filter_{0.005};
 
+  Eigen::Vector3d position_d_;
+  Eigen::Quaterniond orientation_d_;
+
+
+
   franka_position_servo::JointLimits joint_limits_;
   
   // Dynamic reconfigure
   std::unique_ptr< dynamic_reconfigure::Server<franka_position_servo::joint_controller_paramsConfig> > dynamic_server_joint_controller_params_;
   ros::NodeHandle dynamic_reconfigure_joint_controller_params_node_;
 
-  franka_hw::TriggerRate trigger_publish_;
+  franka_hw::TriggerRate trigger_publish_, trigger_publish_force_, trigger_publish_pose_;
 //   realtime_tools::RealtimePublisher<franka_position_servo::JointControllerStates> publisher_controller_states_;
   realtime_tools::RealtimePublisher<franka_position_servo::RobotState> publisher_robot_states_;
+  realtime_tools::RealtimePublisher<geometry_msgs::WrenchStamped> publisher_forces_;
+  realtime_tools::RealtimePublisher<geometry_msgs::PoseStamped> publisher_eefpose_;
 
   bool checkPositionLimits(std::vector<double> positions);
 

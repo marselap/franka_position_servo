@@ -81,7 +81,7 @@ bool PositionJointPositionController::init(hardware_interface::RobotHW* robot_ha
         ROS_ERROR("PositionJointPositionController: Unable to find upper position limit  values for joint %s...",
                        joint_limits_.joint_names[i].c_str());
       }
-  }  
+  }   
 
   position_joint_handles_.resize(7);
   for (size_t i = 0; i < 7; ++i) {
@@ -100,6 +100,28 @@ bool PositionJointPositionController::init(hardware_interface::RobotHW* robot_ha
                     << controller_state_publish_rate << " [Hz].");
   }
   trigger_publish_ = franka_hw::TriggerRate(controller_state_publish_rate);
+
+
+  double force_publish_rate(500.0);
+  trigger_publish_force_ = franka_hw::TriggerRate(force_publish_rate);
+
+  trigger_publish_pose_ = franka_hw::TriggerRate(force_publish_rate);
+
+  auto* state_interface = robot_hardware->get<franka_hw::FrankaStateInterface>();
+  if (state_interface == nullptr) {
+    ROS_ERROR_STREAM("joint_position_controller: Error getting state interface from hardware");
+    return false;
+  }
+  try {
+    state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(
+        state_interface->getHandle("panda_robot"));
+  } catch (hardware_interface::HardwareInterfaceException& ex) {
+    ROS_ERROR_STREAM(
+        "joint_position_controller: Exception getting state handle from interface: " << ex.what());
+    return false;
+  }
+
+
 
   dynamic_reconfigure_joint_controller_params_node_ =
       ros::NodeHandle("/position_joint_position_controller/arm/controller_parameters_config");
@@ -136,6 +158,36 @@ bool PositionJointPositionController::init(hardware_interface::RobotHW* robot_ha
 
   }
 
+  publisher_forces_.init(node_handle, "/franka_state_controller/forces_est", 1);
+  {
+    std::lock_guard<realtime_tools::RealtimePublisher<geometry_msgs::WrenchStamped> > lock(
+        publisher_forces_);
+        publisher_forces_.msg_.wrench.force.x = 0.;
+        publisher_forces_.msg_.wrench.force.y = 0.;
+        publisher_forces_.msg_.wrench.force.z = 0.;
+
+        publisher_forces_.msg_.wrench.torque.x = 0.;
+        publisher_forces_.msg_.wrench.torque.y = 0.;
+        publisher_forces_.msg_.wrench.torque.z = 0.;
+
+  }
+
+
+  publisher_eefpose_.init(node_handle, "/franka_state_controller/eef_pose", 1);
+  {
+    std::lock_guard<realtime_tools::RealtimePublisher<geometry_msgs::PoseStamped> > lock(
+        publisher_eefpose_);
+        publisher_eefpose_.msg_.pose.position.x = 0.;
+        publisher_eefpose_.msg_.pose.position.y = 0.;
+        publisher_eefpose_.msg_.pose.position.z = 0.;
+
+        publisher_eefpose_.msg_.pose.orientation.x = 0.;
+        publisher_eefpose_.msg_.pose.orientation.y = 0.;
+        publisher_eefpose_.msg_.pose.orientation.z = 0.;
+        publisher_eefpose_.msg_.pose.orientation.w = 0.;
+
+  }
+
 
 
   return true;
@@ -148,6 +200,11 @@ void PositionJointPositionController::starting(const ros::Time& /* time */) {
   pos_d_ = initial_pos_;
   prev_pos_ = initial_pos_;
   pos_d_target_ = initial_pos_;
+
+  franka::RobotState robot_state = state_handle_->getRobotState();
+  std::array<double, 6> force_meas_array = robot_state.O_F_ext_hat_K;
+
+//   std::cout << force_meas_array << std::endl;
 }
 
 void PositionJointPositionController::update(const ros::Time& time,
@@ -160,6 +217,9 @@ void PositionJointPositionController::update(const ros::Time& time,
     prev_pos_[i] = position_joint_handles_[i].getPosition();
     pos_d_[i] = filter_val * pos_d_target_[i] + (1.0 - filter_val) * pos_d_[i];
   }
+
+  franka::RobotState robot_state = state_handle_->getRobotState();
+  std::array<double, 6> force_meas_array = robot_state.O_F_ext_hat_K;
 
 //   if (trigger_publish_() && publisher_controller_states_.trylock()) {
 //     for (size_t i = 0; i < 7; ++i){
@@ -176,6 +236,11 @@ void PositionJointPositionController::update(const ros::Time& time,
 //   }
 
 
+
+  Eigen::Affine3d curr_transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+  position_d_ = curr_transform.translation();
+  orientation_d_ = Eigen::Quaterniond(curr_transform.linear());
+
   std::array<double, 42> O_Jac_EE =
       model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
   if (trigger_publish_() && publisher_robot_states_.trylock())
@@ -187,6 +252,38 @@ void PositionJointPositionController::update(const ros::Time& time,
   }
 
 
+
+  if (trigger_publish_force_() && publisher_forces_.trylock() )
+  {
+        publisher_forces_.msg_.header.stamp = ros::Time::now();
+        publisher_forces_.msg_.wrench.force.x = force_meas_array[0];
+        publisher_forces_.msg_.wrench.force.y = force_meas_array[1];
+        publisher_forces_.msg_.wrench.force.z = force_meas_array[2];
+
+        publisher_forces_.msg_.wrench.torque.x = force_meas_array[3];
+        publisher_forces_.msg_.wrench.torque.y = force_meas_array[4];
+        publisher_forces_.msg_.wrench.torque.z = force_meas_array[5];
+
+        publisher_forces_.unlockAndPublish();        
+
+  }
+
+  if (trigger_publish_pose_() && publisher_eefpose_.trylock() )
+  {
+        publisher_eefpose_.msg_.header.stamp = ros::Time::now();
+        publisher_eefpose_.msg_.pose.position.x = position_d_[0];
+        publisher_eefpose_.msg_.pose.position.y = position_d_[1];
+        publisher_eefpose_.msg_.pose.position.z = position_d_[2];
+
+        publisher_eefpose_.msg_.pose.orientation.x = orientation_d_.x();
+        publisher_eefpose_.msg_.pose.orientation.y = orientation_d_.y();
+        publisher_eefpose_.msg_.pose.orientation.z = orientation_d_.z();
+        publisher_eefpose_.msg_.pose.orientation.w = orientation_d_.w();
+
+        
+        publisher_eefpose_.unlockAndPublish();        
+
+  }
 
   // update parameters changed online either through dynamic reconfigure or through the interactive
   // target by filtering
